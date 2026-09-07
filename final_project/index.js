@@ -7,40 +7,37 @@ const genl_routes = require('./router/general.js').general;
 const app = express();
 
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Session configuration
+
+// Session setup for customers
 app.use(
-    '/customer',
+    "/customer",
     session({
-        secret: 'fingerprint_customer',
-        resave: false,
-        saveUninitialized: false
+        secret: "fingerprint_customer",
+        resave: true,
+        saveUninitialized: true
     })
 );
 
-// Authentication middleware for protected routes
-app.use('/customer/auth/*', function auth(req, res, next) {
+
+// Authentication middleware
+app.use("/customer/auth/*", function auth(req, res, next) {
 
     if (req.session && req.session.username) {
-        req.username = req.session.username;
-        return next();
+        next();
+    } else {
+        return res.status(401).json({
+            message: "Please login first"
+        });
     }
-
-    return res.status(401).json({
-        message: 'Authentication required. Please login first.'
-    });
 });
 
-const PORT = process.env.PORT || 5000;
 
-// Customer routes
-app.use('/customer', customer_routes);
+const PORT = 5000;
 
-// Public routes
-app.use('/', genl_routes);
+app.use("/customer", customer_routes);
+app.use("/", genl_routes);
 
-// Start server
-app.listen(PORT, () => {
+  app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
-});
+ });

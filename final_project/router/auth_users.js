@@ -1,14 +1,12 @@
 const express = require('express');
-const jwt = require('jsonwebtoken');
+
 let books = require('./booksdb.js');
 
 const regd_users = express.Router();
 
 let users = [];
 
-const JWT_SECRET = 'expressBookReviewSecretKey';
-
-// Check whether username is already registered
+// Check whether username already exists
 const isValid = (username) => {
     return users.some(user => user.username === username);
 };
@@ -21,9 +19,10 @@ const authenticatedUser = (username, password) => {
 };
 
 
-// Login - only registered users can login
+// Login
 regd_users.post('/login', (req, res) => {
-    const { username, password } = req.body;
+    const username = req.body.username;
+    const password = req.body.password;
 
     if (!username || !password) {
         return res.status(400).json({
@@ -37,79 +36,31 @@ regd_users.post('/login', (req, res) => {
         });
     }
 
-    const token = jwt.sign(
-        { username: username },
-        JWT_SECRET,
-        { expiresIn: '1h' }
-    );
+    req.session.username = username;
 
     return res.status(200).json({
-        message: 'Login successful',
-        username: username,
-        token: token
+        message: 'Login successful'
     });
 });
 
 
-// Authentication middleware
-const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+// Add or update a book review
+regd_users.put('/auth/review/:isbn', (req, res) => {
+    const isbn = req.params.isbn;
+    const username = req.session.username;
+    const review = req.body.review;
 
-    if (!token) {
+    if (!books[isbn]) {
+        return res.status(404).json({
+            message: 'Book not found'
+        });
+    }
+
+    if (!username) {
         return res.status(401).json({
-            message: 'Authentication required'
+            message: 'Please login first'
         });
     }
-
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) {
-            return res.status(403).json({
-                message: 'Invalid or expired token'
-            });
-        }
-
-        req.user = user;
-        next();
-    });
-};
-
-
-// Get authenticated user's review for a book
-regd_users.get('/auth/review/:isbn', authenticateToken, (req, res) => {
-    const isbn = req.params.isbn;
-
-    if (!books[isbn]) {
-        return res.status(404).json({
-            message: 'Book not found'
-        });
-    }
-
-    const username = req.user.username;
-
-    return res.status(200).json({
-        isbn: isbn,
-        username: username,
-        review: books[isbn].reviews[username] || null
-    });
-});
-
-
-// Add or modify a book review
-regd_users.put('/auth/review/:isbn', authenticateToken, (req, res) => {
-    const isbn = req.params.isbn;
-
-    if (!books[isbn]) {
-        return res.status(404).json({
-            message: 'Book not found'
-        });
-    }
-
-    const username = req.user.username;
-
-    const review =
-        req.body.review ||
-        req.query.review;
 
     if (!review) {
         return res.status(400).json({
@@ -120,18 +71,15 @@ regd_users.put('/auth/review/:isbn', authenticateToken, (req, res) => {
     books[isbn].reviews[username] = review;
 
     return res.status(200).json({
-        message: 'Review added/modified successfully',
-        isbn: isbn,
-        username: username,
-        review: review,
-        reviews: books[isbn].reviews
+        message: 'Review added successfully'
     });
 });
 
 
 // Delete a book review
-regd_users.delete('/auth/review/:isbn', authenticateToken, (req, res) => {
+regd_users.delete('/auth/review/:isbn', (req, res) => {
     const isbn = req.params.isbn;
+    const username = req.session.username;
 
     if (!books[isbn]) {
         return res.status(404).json({
@@ -139,7 +87,11 @@ regd_users.delete('/auth/review/:isbn', authenticateToken, (req, res) => {
         });
     }
 
-    const username = req.user.username;
+    if (!username) {
+        return res.status(401).json({
+            message: 'Please login first'
+        });
+    }
 
     if (!books[isbn].reviews[username]) {
         return res.status(404).json({
@@ -150,13 +102,11 @@ regd_users.delete('/auth/review/:isbn', authenticateToken, (req, res) => {
     delete books[isbn].reviews[username];
 
     return res.status(200).json({
-        message: 'Review deleted successfully',
-        isbn: isbn,
-        reviews: books[isbn].reviews
+        message: 'Review deleted successfully'
     });
 });
 
 
-module.exports.authenticated = regd_users;
-module.exports.isValid = isValid;
-module.exports.users = users;
+ module.exports.authenticated = regd_users;
+ module.exports.isValid = isValid;
+ module.exports.users = users;
